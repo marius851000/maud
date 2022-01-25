@@ -32,6 +32,7 @@ impl Generator {
 
     fn markup(&self, markup: Markup, build: &mut Builder) {
         match markup {
+            Markup::ParseError { .. } => {}
             Markup::Block(Block {
                 markups,
                 outer_span,
@@ -96,7 +97,7 @@ impl Generator {
         })
     }
 
-    fn element(&self, name: TokenStream, attrs: Attrs, body: ElementBody, build: &mut Builder) {
+    fn element(&self, name: TokenStream, attrs: Vec<Attr>, body: ElementBody, build: &mut Builder) {
         build.push_str("<");
         self.name(name.clone(), build);
         self.attrs(attrs, build);
@@ -110,14 +111,10 @@ impl Generator {
     }
 
     fn name(&self, name: TokenStream, build: &mut Builder) {
-        let string = name
-            .into_iter()
-            .map(|token| token.to_string())
-            .collect::<String>();
-        build.push_escaped(&string);
+        build.push_escaped(&name_to_string(name));
     }
 
-    fn attrs(&self, attrs: Attrs, build: &mut Builder) {
+    fn attrs(&self, attrs: Vec<Attr>, build: &mut Builder) {
         for Attribute { name, attr_type } in desugar_attrs(attrs) {
             match attr_type {
                 AttrType::Normal { value } => {
@@ -160,20 +157,23 @@ impl Generator {
 
 ////////////////////////////////////////////////////////
 
-fn desugar_attrs(attrs: Attrs) -> Vec<Attribute> {
+fn desugar_attrs(attrs: Vec<Attr>) -> Vec<Attribute> {
     let mut classes_static = vec![];
     let mut classes_toggled = vec![];
     let mut ids = vec![];
     let mut attributes = vec![];
     for attr in attrs {
         match attr {
-            Attr::Class { name, toggler, .. } => {
-                if let Some(toggler) = toggler {
-                    classes_toggled.push((name, toggler));
-                } else {
-                    classes_static.push(name);
-                }
-            }
+            Attr::Class {
+                name,
+                toggler: Some(toggler),
+                ..
+            } => classes_toggled.push((name, toggler)),
+            Attr::Class {
+                name,
+                toggler: None,
+                ..
+            } => classes_static.push(name),
             Attr::Id { name, .. } => ids.push(name),
             Attr::Attribute { attribute } => attributes.push(attribute),
         }
